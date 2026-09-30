@@ -1,0 +1,23 @@
+name: Email giornaliera
+
+on:
+  schedule:
+    - cron: "0 7 * * *"   # ogni giorno alle 07:00 UTC
+  workflow_dispatch:       # per lanciarlo a mano e testarlo
+
+jobs:
+  invia-mail:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invia email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Promemoria giornaliero"
+          to: ${{ secrets.MAIL_TO }}
+          from: "GitHub Automazione <${{ secrets.MAIL_USERNAME }}>"
+          body: "Buongiorno! Questa mail è stata inviata da GitHub Actions."

@@ -20,11 +20,18 @@ import re
 import smtplib
 import ssl
 import sys
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import parsedate_to_datetime
+
+try:
+    from zoneinfo import ZoneInfo
+    FUSO = ZoneInfo("Europe/Rome")
+except Exception:  # fallback se i fusi orari non sono disponibili
+    FUSO = timezone.utc
 
 # ----------------------------------------------------------------------------
 # CONFIGURAZIONE
@@ -39,6 +46,8 @@ FONTI = [
 ]
 
 NEWS_PER_FONTE = 5      # quante notizie mostrare per ogni sito
+SOLO_OGGI = True        # True = solo notizie pubblicate oggi (ora italiana)
+VERIFICA_LINK = True    # True = scarta gli articoli il cui link non esiste più (404/410)
 TIMEOUT = 15            # secondi di attesa per ogni feed
 USER_AGENT = "Mozilla/5.0 (compatible; NotizieCalcioBot/1.0)"
 
@@ -120,12 +129,58 @@ def parse_feed(contenuto):
     return articoli
 
 
-def scarica_fonte(fonte):
-    req = urllib.request.Request(fonte["url"], headers={"User-Agent": USER_AGENT})
+def oggi():
+    """Data odierna in ora italiana (i server GitHub lavorano in UTC)."""
+    return datetime.now(FUSO).date()
+
+
+def adesso():
+    return datetime.now(FUSO)
+
+
+def scarica_contenuto(url):
+    # Cache-Control evita di ricevere una copia vecchia del feed
+    req = urllib.request.Request(url, headers={
+        "User-Agent": USER_AGENT,
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    })
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-        contenuto = r.read()
-    articoli = parse_feed(contenuto)
+        return r.read()
+
+
+def e_di_oggi(articolo):
+    """True se l'articolo è stato pubblicato oggi (ora italiana).
+    Gli articoli senza data vengono scartati: non si può sapere se sono recenti."""
+    if not articolo["data"]:
+        return False
+    return articolo["data"].astimezone(FUSO).date() == oggi()
+
+
+def link_esiste(url):
+    """False solo se il sito risponde 404/410; in caso di dubbio tiene l'articolo."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT}, method="HEAD")
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT):
+            return True
+    except urllib.error.HTTPError as e:
+        return e.code not in (404, 410)
+    except Exception:
+        return True
+
+
+def scarica_fonte(fonte):
+    articoli = parse_feed(scarica_contenuto(fonte["url"]))
+    totale = len(articoli)
+
+    if SOLO_OGGI:
+        articoli = [a for a in articoli if e_di_oggi(a)]
     articoli.sort(key=lambda a: a["data"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+    if VERIFICA_LINK:
+        articoli = [a for a in articoli if link_esiste(a["link"])]
+
+    print(f"         {fonte['nome']}: {totale} nel feed, {len(articoli)} valide")
     return articoli[:NEWS_PER_FONTE]
 
 
@@ -153,7 +208,7 @@ def _esc(t):
 def _ora(a):
     if not a["data"]:
         return ""
-    return a["data"].astimezone().strftime("%H:%M")
+    return a["data"].astimezone(FUSO).strftime("%H:%M")
 
 
 def _card_principale(a, fonte):
@@ -211,8 +266,8 @@ def _sezione(fonte, articoli):
 
 
 def costruisci_html(fonti_news):
-    adesso = datetime.now()
-    data_it = f"{GIORNI[adesso.weekday()].capitalize()} {adesso.day} {MESI[adesso.month - 1]} {adesso.year}"
+    ora_it = adesso()
+    data_it = f"{GIORNI[ora_it.weekday()].capitalize()} {ora_it.day} {MESI[ora_it.month - 1]} {ora_it.year}"
 
     # Notizia in evidenza: la prima con immagine tra le più recenti
     tutte = [(f, a) for f in fonti_news for a in f["articoli"]]
@@ -284,7 +339,7 @@ def invia_email(html_body, testo):
         sys.exit("Errore: servono le variabili MAIL_USERNAME, MAIL_PASSWORD e MAIL_TO.")
 
     msg = EmailMessage()
-    msg["Subject"] = f"⚽ Notizie di calcio · {datetime.now().day} {MESI[datetime.now().month - 1]}"
+    msg["Subject"] = f"⚽ Notizie di calcio · {adesso().day} {MESI[adesso().month - 1]}"
     msg["From"] = f"Notizie Calcio <{utente}>"
     msg["To"] = destinatario
     msg.set_content(testo)
@@ -304,7 +359,8 @@ def main():
 
     fonti_news = raccogli_news()
     if not fonti_news:
-        sys.exit("Nessun feed ha restituito notizie: controlla gli URL in FONTI.")
+        print("Nessuna notizia di oggi trovata: email non inviata.")
+        return
 
     testo = costruisci_testo(fonti_news)
     corpo_html = costruisci_html(fonti_news)

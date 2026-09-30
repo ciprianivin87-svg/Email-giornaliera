@@ -2,22 +2,22 @@ name: Email giornaliera
 
 on:
   schedule:
-    - cron: "0 7 * * *"   # ogni giorno alle 07:00 UTC
-  workflow_dispatch:       # per lanciarlo a mano e testarlo
+    - cron: "0 6 * * *"   # ogni giorno alle 06:00 UTC (08:00 in Italia col cambio ora legale)
+  workflow_dispatch:       # per lanciarlo a mano
 
 jobs:
   invia-mail:
     runs-on: ubuntu-latest
     steps:
-      - name: Invia email
-        uses: dawidd6/action-send-mail@v3
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "Promemoria giornaliero"
-          to: ${{ secrets.MAIL_TO }}
-          from: "GitHub Automazione <${{ secrets.MAIL_USERNAME }}>"
-          body: "Buongiorno! Questa mail è stata inviata da GitHub Actions."
+          python-version: "3.12"
+
+      - name: Raccogli news e invia email
+        env:
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python notizie_calcio.py

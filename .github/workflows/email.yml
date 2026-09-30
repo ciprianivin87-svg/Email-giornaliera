@@ -2,20 +2,38 @@ name: Email giornaliera
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # ogni giorno alle 06:00 UTC (08:00 in Italia col cambio ora legale)
-  workflow_dispatch:       # per lanciarlo a mano
+    # Due orari UTC: uno vale in estate (CEST), l'altro in inverno (CET).
+    # Il controllo nel job fa proseguire solo quello che cade alle 11 a Roma.
+    - cron: "17 9 * * *"
+    - cron: "17 10 * * *"
+  workflow_dispatch:       # avvio manuale, ignora il controllo dell'orario
 
 jobs:
   invia-mail:
     runs-on: ubuntu-latest
     steps:
+      - name: Controlla che siano le 11 in Italia
+        id: orario
+        run: |
+          ORA=$(TZ=Europe/Rome date +%H)
+          echo "Ora attuale a Roma: $ORA"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$ORA" = "11" ]; then
+            echo "esegui=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "esegui=false" >> "$GITHUB_OUTPUT"
+            echo "Non sono le 11 a Roma, salto questa esecuzione."
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.orario.outputs.esegui == 'true'
 
       - uses: actions/setup-python@v5
+        if: steps.orario.outputs.esegui == 'true'
         with:
           python-version: "3.12"
 
       - name: Raccogli news e invia email
+        if: steps.orario.outputs.esegui == 'true'
         env:
           MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
           MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}

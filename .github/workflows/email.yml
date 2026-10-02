@@ -32,4 +32,4 @@ jobs:
           # EMAIL_USER: ${{ secrets.EMAIL_USER }}
           # EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python main.py # Sostituisci main.py con il nome del tuo file script Python se diverso
+        run: notizie_calcio.py # Sostituisci main.py con il nome del tuo file script Python se diverso

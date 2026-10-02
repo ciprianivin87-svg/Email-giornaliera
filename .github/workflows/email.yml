@@ -27,9 +27,8 @@ jobs:
 
       - name: Raccogli news e invia email
         env:
-          # Aggiungi qui eventuali secret utilizzati dallo script Python
-          # Esempio:
-          # EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          # EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python notizie_calcio.py # Sostituisci main.py con il nome del tuo file script Python se diverso
+        run: python notizie_calcio.py

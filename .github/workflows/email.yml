@@ -2,40 +2,34 @@ name: Email giornaliera
 
 on:
   schedule:
-    # Due orari UTC: uno vale in estate (CEST), l'altro in inverno (CET).
-    # Il controllo nel job fa proseguire solo quello che cade alle 11 a Roma.
-    - cron: "17 9 * * *"
-    - cron: "17 10 * * *"
-  workflow_dispatch:       # avvio manuale, ignora il controllo dell'orario
+    # 09:00 UTC = 11:00 italiane (con ora legale UTC+2)
+    # Cambia in '0 10 * * *' quando tornerà l'ora solare (UTC+1)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Permette l'avvio manuale dalla scheda Actions
 
 jobs:
   invia-mail:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Controlla che siano le 11 in Italia
-        id: orario
-        run: |
-          ORA=$(TZ=Europe/Rome date +%H)
-          echo "Ora attuale a Roma: $ORA"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$ORA" = "11" ]; then
-            echo "esegui=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "esegui=false" >> "$GITHUB_OUTPUT"
-            echo "Non sono le 11 a Roma, salto questa esecuzione."
-          fi
+      - name: Checkout del codice
+        uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-        if: steps.orario.outputs.esegui == 'true'
-
-      - uses: actions/setup-python@v5
-        if: steps.orario.outputs.esegui == 'true'
+      - name: Configurazione di Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.x'
+
+      - name: Installazione dipendenze
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Raccogli news e invia email
-        if: steps.orario.outputs.esegui == 'true'
         env:
-          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
-          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
-          MAIL_TO: ${{ secrets.MAIL_TO }}
-        run: python notizie_calcio.py
+          # Aggiungi qui eventuali secret utilizzati dallo script Python
+          # Esempio:
+          # EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          # EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python main.py # Sostituisci main.py con il nome del tuo file script Python se diverso
